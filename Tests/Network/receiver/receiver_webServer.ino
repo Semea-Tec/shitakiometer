@@ -26,8 +26,8 @@
 #define BAND 915.0 // MHz
 
 // WiFi Configuration
-const char *ssid = "Gratidao";
-const char *password = "coutinho01";
+const char *ssid = ".....";
+const char *password = ".....";
 
 // Web Server (HTTP) on port 80
 WebServer webServer(80);
