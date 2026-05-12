@@ -1,99 +1,84 @@
-# Infraestrutura do Servidor (IoT Stack)
+# Infraestrutura do Servidor (IoT Stack) - Shitakiometer
 
-Este diretório contém a configuração Docker para subir uma stack completa de monitoramento IoT, integrando MQTT, processamento de fluxo, banco de dados temporal e dashboards.
+Este diretório contém a configuração Docker para subir uma stack completa de monitoramento IoT, integrando MQTT, um serviço de ponte (bridge) customizado em Python, banco de dados temporal (InfluxDB) e dashboards automáticos no Grafana.
 
-## Serviços
+## Arquitetura e Serviços
 
 | Serviço | Porta Externa | Função |
 |---------|---------------|--------|
-| **Mosquitto** | 1883 / 9001 | Broker MQTT para receber dados dos sensores. |
-| **Node-RED** | 1880 | Orquestração (Lê do MQTT e salva no InfluxDB). |
+| **Mosquitto** | 1883 / 9001 | Broker MQTT para receber dados dos sensores (`sensores/#`). |
+| **mqtt-bridge** | Interna | Script Python que ouve os dados do MQTT e salva no InfluxDB automaticamente. |
 | **InfluxDB** | 8086 | Banco de dados Time-Series para armazenar histórico. |
-| **Grafana** | 3000 | Visualização de dados e Dashboards. |
+| **Grafana** | 3000 | Visualização de dados e Dashboards (Provisionamento automático). |
+
+---
 
 ## Como Rodar
 
-1. Certifique-se de ter o **Docker** e **Docker Compose** instalados.
-2. Na pasta `server`, execute:
+Para facilitar o dia a dia, preparamos um **Makefile** com os principais comandos.
+Se você estiver no Windows, pode rodar os comandos do `docker-compose` manualmente caso não tenha o `make` instalado.
+
+### Usando o Makefile (Recomendado se suportado)
+
+1. **Subir a infraestrutura:**
    ```bash
-   docker-compose up -d
+   make up
    ```
-3. Verifique se os containers estão rodando:
+2. **Visualizar os logs (acompanhar os dados chegando):**
    ```bash
-   docker-compose ps
+   make logs
+   ```
+3. **Parar os serviços:**
+   ```bash
+   make down
    ```
 
-## Guia de Configuração e Acesso
+*(Veja `make help` para todos os comandos, incluindo o `make clean` para resetar os bancos de dados).*
 
-### 1. InfluxDB (Banco de Dados)
-O banco é inicializado automaticamente com as variáveis de ambiente definidas no `docker-compose.yml`.
+### Usando o Docker Compose diretamente
+- Para subir: `docker-compose up -d --build`
+- Para ver logs: `docker-compose logs -f`
+- Para descer: `docker-compose down`
+
+---
+
+## Acesso aos Painéis
+
+### 1. Grafana (Visualização)
+O Grafana já foi configurado com **Provisionamento Automático**, ou seja, ele já se conecta ao banco e já traz um Dashboard pronto assim que é iniciado!
+
+- **Acesso:** http://localhost:3000
+- **Usuário:** `admin`
+- **Senha:** `admin` *(solicitará troca no primeiro acesso)*
+
+Vá em **Dashboards** no menu lateral, e você verá o painel **Sensores IoT** com gráficos para Temperatura e Humidade já funcionando.
+
+### 2. InfluxDB (Banco de Dados)
+Caso queira visualizar os dados brutos ou criar consultas (Flux Queries) avançadas:
 
 - **Acesso:** http://localhost:8086
 - **Usuário:** `admin`
 - **Senha:** `adminpassword`
-- **Organização:** `semea_tec`
+- **Organização:** `shitakiometer`
 - **Bucket:** `sensores`
 
-> **Importante:** Ao acessar pela primeira vez, vá em **Data (Load Data) > API Tokens** e copie o **Admin's Token**. Você precisará dele para configurar o Node-RED e o Grafana. Caso não tenha acesso criei um novo token e salve-o.
+O Token da API para integrações externas já está fixado via variáveis de ambiente (`DOCKER_INFLUXDB_INIT_ADMIN_TOKEN`), tornando a comunicação interna muito mais fácil.
 
-### 2. Node-RED (Ponte MQTT -> InfluxDB)
-Como o InfluxDB v2 não ingere MQTT nativamente, usamos o Node-RED para fazer essa ponte.
+---
 
-- **Acesso:** http://localhost:1880
-- **Importação Rápida (Recomendado):**
-  - Utilize o arquivo [`flows.json`](./flows.json) disponível neste diretório.
-  - No Node-RED: **Menu > Import**, selecione o arquivo e confirme.
-  - **Atenção:** Dê um duplo clique no nó do InfluxDB, edite a configuração do servidor (ícone de lápis) e cole o **Token** que você copiou no passo anterior.
+## Como Testar sem o Hardware (Dados Mockados)
 
-- **Detalhes da Configuração (Manual):**
-  - **Conexão com MQTT:**
-    - Use um nó `mqtt in`.
-    - Servidor: `mosquitto` (nome do container na rede docker).
-    - Porta: `1883`.
+Se você não tiver seu microcontrolador conectado, você pode gerar dados simulados (mock) para ver os gráficos do Grafana ganhando vida:
 
-  - **Transformação de Dados (Function):**
-    - Adicione um nó `function` entre o MQTT e o InfluxDB.
-    - É necessário **ligar** os nós: saída do MQTT -> entrada da Function -> entrada do InfluxDB.
-    - Este nó transforma o dado bruto recebido em um objeto JSON com campos como `measurement` e `value` para o banco.
-  
-  - **Conexão com InfluxDB:**
-    - Use um nó `influxdb out` (instale via *Manage Palette* se necessário: `node-red-contrib-influxdb`).
-    - Versão: 2.0.
-    - URL: `http://influxdb:8086`.
-    - Token: (Token copiado do passo anterior).
-    - Org: `semea_tec` / Bucket: `sensores`.
+1. Certifique-se de que os contêineres Docker estão rodando.
+2. Instale as dependências locais de Python (necessário apenas na sua máquina, caso queira rodar o mock localmente):
+   ```bash
+   pip install paho-mqtt
+   ```
+3. Execute o script simulador:
+   ```bash
+   python mock_sensor.py
+   # Ou use: make mock
+   ```
 
-### 3. Grafana (Dashboards)
-- **Acesso:** http://localhost:3000
-- **Login inicial:** `admin` / `admin` (solicitará troca de senha).
-
-**Adicionando Fonte de Dados (Data Source):**
-1. Vá em **Connections > Data Sources > Add data source**.
-2. Selecione **InfluxDB**.
-3. Em **Query Language**, escolha **Flux**.
-4. Em **HTTP > URL**, digite: `http://influxdb:8086` (comunicação interna docker).
-5. Autenticação:
-   - Organization: `semea_tec`
-   - Token: (Token do InfluxDB)
-   - Default Bucket: `sensores`
-6. Clique em **Save & Test**.
-
-### 4. Criando um Dashboard Simples
-O método mais prático para criar gráficos é gerar a consulta no InfluxDB e importá-la no Grafana.
-
-**Passo 1: Gerar a Query no InfluxDB**
-1. Acesse o InfluxDB (http://localhost:8086) e vá em **Data Explorer** (ícone de gráfico).
-2. Na parte inferior, selecione o bucket `sensores`.
-3. Em `_measurement`, escolha `temperatura`.
-4. Em `_field`, escolha `value`.
-5. Clique em **Submit** para visualizar os dados brutos.
-6. Clique no botão **Script Editor** e copie o código gerado (Linguagem Flux).
-
-**Passo 2: Configurar no Grafana**
-1. No Grafana, vá em **Dashboards > New** e clique em **Add visualization**.
-2. Selecione a fonte de dados `InfluxDB` que você configurou.
-3. Na área de código da query, cole o script que você copiou do InfluxDB.
-4. Clique em **Run queries** (ou clique fora da caixa de texto).
-5. Personalize o título e cores no menu lateral direito e clique em **Save**.
-
-Agora você tem um dashboard exibindo os dados em tempo real vindos do MQTT.
+O script começará a publicar valores flutuantes de Temperatura e Humidade a cada 5 segundos no tópico `sensores/temperatura` e `sensores/umidade`. Aperte `Ctrl + C` para parar.
