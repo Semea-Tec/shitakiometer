@@ -25,4 +25,4 @@ clean:
 	docker-compose down -v
 
 mock:
-	python mock_sensor.py
+	python python-mock/mock_sensor.py
