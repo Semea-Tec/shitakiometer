@@ -1,0 +1,129 @@
+================================================================================
+SHITAKIOMETER - SISTEMA DE MONITORAMENTO AMBIENTAL PARA ESTUFAS DE COGUMELOS
+================================================================================
+
+APRESENTAÇÃO DO PROJETO
+------------------------
+
+O Shitakiometer é um sistema inovador de monitoramento ambiental desenvolvido 
+especificamente para otimizar a produção em estufas de cogumelos. Nascido de uma 
+parceria autêntica com o agricultor Milton Atarassi, do Sítio Atarassi, o projeto 
+representa a fusão entre necessidade real do campo e tecnologia de alta performance.
+
+ORIGEM E DIFERENCIAL
+--------------------
+
+Diferentemente de soluções genéricas, o Shitakiometer foi desenvolvido a partir de 
+conversas diretas com o produtor, compreendendo profundamente seus desafios diários, 
+suas rotinas e as tecnologias já utilizadas em seu sítio.
+
+O projeto nasceu da seguinte proposta:
+• Ouvir as reais necessidades do agricultor
+• Compreender sua forma de trabalho e lidar com problemas
+• Estudar tecnologias e métodos que ele já utilizava
+• Desenvolver uma solução que fosse intuitiva, acessível e realmente útil
+
+Isso garantiu que o Shitakiometer não fosse apenas um projeto de tecnologia, 
+mas uma ferramenta prática, pensada por quem entende o trabalho no campo.
+
+PROPOSTA DE VALOR
+-----------------
+
+• LONGO ALCANCE: Tecnologia LoRa para transmissão em áreas rurais extensas, 
+  sem dependência de internet tradicional
+
+• AUTONOMIA ENERGÉTICA: Alimentação por painéis solares e baterias, eliminando 
+  necessidade de manutenção de carga e permitindo instalação em qualquer local
+
+• MONITORAMENTO EM TEMPO REAL: Coleta precisa de temperatura, umidade relativa 
+  e níveis de CO2 com visualização imediata
+
+• DESIGN CENTRADO NO USUÁRIO: Interface intuitiva baseada em necessidades reais 
+  do agricultor
+
+TECNOLOGIAS UTILIZADAS
+----------------------
+
+Hardware:
+✓ Heltec ESP32 com rádio LoRa integrado
+✓ Sensores DHT22 (temperatura e umidade)
+✓ Sensores MH-Z19B e SCD40 (dióxido de carbono de alta precisão)
+✓ Painel solar 5V 1.25W + bateria 18650 para autonomia
+
+Backend e Visualização:
+✓ Mosquitto: Broker MQTT para orquestração de mensagens
+✓ Node-RED: Automações e fluxos de dados
+✓ InfluxDB: Banco de dados otimizado para séries temporais
+✓ Grafana: Dashboards em tempo real e alertas personalizados
+
+FUNCIONALIDADES PRINCIPAIS
+--------------------------
+
+☑ Monitoramento multiparamétrico de variáveis críticas
+☑ Transmissão de longo alcance via LoRa
+☑ Baixa manutenção - alimentação 100% solar
+☑ Alertas automáticos para níveis críticos de CO2
+☑ Histórico completo de dados para análise de tendências
+☑ Notificações via Telegram/WhatsApp para situações críticas
+☑ Interface adaptada à linguagem e fluxo de trabalho do agricultor
+
+ETAPA ATUAL E PRÓXIMOS PASSOS
+------------------------------
+
+O projeto já alcançou importantes marcos:
+
+✓ Integração e validação de todos os sensores
+✓ Comunicação LoRa ponto-a-ponto estabelecida
+✓ Stack de dados operacional e testado
+✓ Dashboards preliminares funcionando
+
+Próximos passos:
+
+→ Otimização do sistema de alimentação solar
+→ Implementação de estratégias de eficiência energética (Deep Sleep)
+→ Customização final da interface com o usuário
+→ Testes de campo no Sítio Atarassi
+→ Validação de alcance, confiabilidade e resiliência
+
+IMPACTO E SUSTENTABILIDADE
+---------------------------
+
+O Shitakiometer não é apenas tecnologia - é uma resposta concreta aos desafios 
+reais de pequenos e médios produtores rurais. Através de uma abordagem colaborativa 
+e centrada no usuário, criamos uma solução que:
+
+• Reduz custos operacionais com monitoramento automatizado
+• Melhora a qualidade da produção com dados precisos
+• Funciona com independência energética
+• Mantém a simplicidade necessária para adoção no campo
+• Cria diálogo entre inovação e experiência prática
+
+EQUIPE DE DESENVOLVIMENTO
+-------------------------
+
+Projeto colaborativo envolvendo:
+• Desenvolvimento de hardware e firmware
+• Arquitetura de sistema de dados
+• Design de interface focado em usabilidade
+• Parceria com produtor experiente para validação
+
+Parceiro de Campo:
+Milton Atarassi - Sítio Atarassi
+(Consultor técnico e validador de usabilidade)
+
+VISÃO FUTURA
+------------
+
+O Shitakiometer estabelece um modelo replicável para IoT agrícola: tecnologia 
+de qualidade desenvolvida COM o usuário, não apenas PARA o usuário. Esse modelo 
+pode ser adaptado para outros cultivos e situações do campo, sempre respeitando 
+as particularidades de cada produtor.
+
+================================================================================
+
+Para mais informações sobre o projeto, visite nossos repositórios e documentação,
+ou entre em contato com a equipe de desenvolvimento.
+
+Desenvolvido com parceria local e pensamento estratégico em tecnologia agrícola.
+
+================================================================================
