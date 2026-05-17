@@ -39,29 +39,6 @@ struct_message incomingReadings;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
 SX1262 radio = new Module(SS_LORA, DIO1_LORA, RST_LORA, BUSY_LORA);
 
-void OnDataRecv(const uint8_t * mac, const struct_message *incomingData, int len) {
-    memcpy(&incomingReadings, incomingData, sizeof(incomingReadings));
-    Serial.print("Mensagem recebida: ");
-    Serial.println(incomingReadings.temp);
-    Serial.println(incomingReadings.ppmCo2);
-    Serial.printf("Mac: %02X:%02X:%02X:%02X:%02X:%02X\n",
-        incomingReadings.mac[0], incomingReadings.mac[1], incomingReadings.mac[2], incomingReadings.mac[3], incomingReadings.mac[4], incomingReadings.mac[5]);
-
-    int tempState = radio.transmit(String(incomingData->temp).c_str());
-    int co2State = radio.transmit(String(incomingData->ppmCo2).c_str());
-
-
-    if (tempState == RADIOLIB_ERR_NONE && co2State == RADIOLIB_ERR_NONE)
-    {
-        Serial.println(F("success!"));
-    }
-    else
-    {
-        Serial.print(F("failed, code "));
-        Serial.println(state);
-    }
-}
-
 void setup()
 {
     Serial.begin(115200);
@@ -115,24 +92,6 @@ void setup()
         Serial.println(state);
         while (true)
             ;
-    }
-
-    WiFi.mode(WIFI_STA);
-
-    if (esp_now_init() != ESP_OK) {
-        Serial.println("Erro ao iniciar ESP-NOW");
-        return;
-    }
-
-    esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
-
-    esp_err_t ret = esp_read_mac(incomingReadings.mac, ESP_MAC_WIFI_STA);
-
-    if (ret == ESP_OK) {
-        Serial.printf("MAC capturado com sucesso: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                    incomingReadings.mac[0], incomingReadings.mac[1], incomingReadings.mac[2], incomingReadings.mac[3], incomingReadings.mac[4], incomingReadings.mac[5]);
-    } else {
-        Serial.println("Erro crítico: Não foi possível ler o MAC da memória.");
     }
 }
 
