@@ -43,8 +43,6 @@ void setup()
     Serial.begin(115200);
     pinMode(CO2_IN, INPUT);
 
-    // Inicializa a conexão UART para o sensor de CO2
-    co2Serial.begin(BAUDRATE, SERIAL_8N1, MHZ_RX_PIN, MHZ_TX_PIN);
 
     // Turn on Vext power for OLED and LoRa (V3 uses GPIO 36)
     pinMode(VEXT_PIN, OUTPUT);
@@ -121,13 +119,13 @@ void loop()
     }
 
     // 2. Leitura de CO2 (MH-Z19C)
-    int co2 = co2.readCO2PWM(); // leitura do co2
+    int ppm = co2.readCO2PWM(); // leitura do co2
     uint8_t cmd[9] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
 
 
     // 3. Monta a string para envio
     char payload[64];
-    snprintf(payload, sizeof(payload), "t:%.1f,h:%.1f,co2:%d", temp, hum, co2);
+    snprintf(payload, sizeof(payload), "t:%.1f,h:%.1f,co2:%d", temp, hum, ppm);
 
     Serial.print("Transmitindo: ");
     Serial.println(payload);
@@ -177,9 +175,9 @@ void loop()
 
     display.setCursor(0, 36);
     display.print("CO2:  ");
-    if (co2 != -1)
+    if (ppm != -1)
     {
-        display.print(co2);
+        display.print(ppm);
         display.print(" ppm");
     }
     else
