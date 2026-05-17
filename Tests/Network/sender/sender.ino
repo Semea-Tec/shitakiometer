@@ -31,6 +31,7 @@
 typedef struct struct_message {
     uint8_t mac[6];
     float temp;
+    int ppmCo2;
 } struct_message;
 
 struct_message incomingReadings;
@@ -42,12 +43,15 @@ void OnDataRecv(const uint8_t * mac, const struct_message *incomingData, int len
     memcpy(&incomingReadings, incomingData, sizeof(incomingReadings));
     Serial.print("Mensagem recebida: ");
     Serial.println(incomingReadings.temp);
+    Serial.println(incomingReadings.ppmCo2);
     Serial.printf("Mac: %02X:%02X:%02X:%02X:%02X:%02X\n",
         incomingReadings.mac[0], incomingReadings.mac[1], incomingReadings.mac[2], incomingReadings.mac[3], incomingReadings.mac[4], incomingReadings.mac[5]);
 
-    int state = radio.transmit(String(incomingData->temp).c_str());
+    int tempState = radio.transmit(String(incomingData->temp).c_str());
+    int co2State = radio.transmit(String(incomingData->ppmCo2).c_str());
 
-    if (state == RADIOLIB_ERR_NONE)
+
+    if (tempState == RADIOLIB_ERR_NONE && co2State == RADIOLIB_ERR_NONE)
     {
         Serial.println(F("success!"));
     }
@@ -145,6 +149,6 @@ void loop()
     display.setCursor(0, 35);
     display.println(incomingReadings.temp);
     display.display();
-
+    
     delay(2000);
 }
