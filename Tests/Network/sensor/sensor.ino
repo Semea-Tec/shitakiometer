@@ -8,7 +8,7 @@
 
 // Pinos para leitura do CO2
 
-#define CO2_IN 5 // Pino PWM
+#define CO2_IN 19 // Pino PWM
 
 DHT22 dhtSensor(DHT_PIN);
 
@@ -70,10 +70,11 @@ void setup() {
 void loop() {
   float temp = dhtSensor.getTemperature();
   int ppmCo2 = co2.readCO2PWM();
+  // int ppmCo2 = 400;
 
   
   // Checa se a leitura é válida (nan = Not a Number)
-  if (isnan(temp) || isnan(ppmCo2)) {
+  if (isnan(temp) || ppmCo2 <= 0) {
     Serial.println("Falha na leitura do sensor DHT22!");
   } else {
     myData.temp = temp;
@@ -81,7 +82,7 @@ void loop() {
     esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
     
     if (result == ESP_OK) {
-      Serial.printf("MAC Remetente: %02X:%02X... | Enviado: %.2f°C\n", myData.mac[0], myData.temp);
+      Serial.printf("MAC Remetente: %02X:%02X... | Enviado: %.2f°C %d ppm (CO2)\n", myData.mac[0], myData.temp, myData.ppmCo2);
     } else {
       Serial.println("Erro ao enviar via ESP-NOW");
     }

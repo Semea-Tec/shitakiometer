@@ -140,14 +140,23 @@ void loop()
 {
     // Update Display
     display.clearDisplay();
+
     display.setTextSize(1);
     display.setCursor(0, 0);
     display.println("SENDER V3");
-    display.setCursor(0, 20);
-    display.print("Sending Temperature: ");
-    display.setTextSize(2);
-    display.setCursor(0, 35);
+
+    display.setCursor(0, 15);
+    display.print("Temp: ");
     display.println(incomingReadings.temp);
+
+    display.setCursor(0, 25);
+    display.print("CO2: ");
+    display.println(incomingReadings.ppmCo2);
+
+    display.setTextSize(2);
+    display.setCursor(0, 45);
+    display.println("OK");
+
     display.display();
     
     delay(2000);
