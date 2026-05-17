@@ -246,7 +246,10 @@ void setup()
     display.dim(false);
     display.setTextColor(WHITE);
     // initial display will be updated to show title+IP after WiFi connects
-
+    
+    // Show title and IP on the OLED so user can connect
+    showTitleAndIP();
+    
     // Setup WiFi
     setup_wifi();
 
@@ -288,9 +291,7 @@ void setup()
     Serial.print("[HTTP] Web server started on http://");
     Serial.print(WiFi.localIP());
     Serial.println(":80");
-
-    // Show title and IP on the OLED so user can connect
-    showTitleAndIP();
+    
 }
 
 void loop()
@@ -347,8 +348,56 @@ void loop()
             latestData.rssi = radio.getRSSI();
             latestData.timestamp = millis();
 
-            // Keep OLED showing only title+IP (do not display sensor values)
-            showTitleAndIP();
+            // // Keep OLED showing only title+IP (do not display sensor values)
+            // showTitleAndIP();
+
+            // 5. Atualiza o Display OLED
+            display.clearDisplay();
+            display.setTextSize(1);
+            display.setCursor(0, 0);
+            display.println("SENDER V3");
+
+            display.setCursor(0, 12);
+            display.print("Temp: ");
+            if (!isnan(latestData.temperature))
+            {
+                display.print(latestData.temperature);
+                display.print(" C");
+            }
+            else
+            {
+                display.print("ERRO");
+            }
+
+            display.setCursor(0, 24);
+            display.print("Umid: ");
+            if (!isnan(latestData.humidity))
+            {
+                display.print(latestData.humidity);
+                display.print(" %");
+            }
+            else
+            {
+                display.print("ERRO");
+            }
+
+            display.setCursor(0, 36);
+            display.print("CO2:  ");
+            if (latestData.co2 != -1)
+            {
+                display.print(latestData.co2);
+                display.print(" ppm");
+            }
+            else
+            {
+                display.print("ERRO");
+            }
+
+            display.setCursor(0, 50);
+            display.print("LoRa: ");
+            display.println(state == RADIOLIB_ERR_NONE ? "OK" : "FALHA");
+
+            display.display();
         }
 
         // Volta a escutar novos pacotes
