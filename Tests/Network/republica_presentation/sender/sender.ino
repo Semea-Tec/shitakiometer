@@ -1,4 +1,4 @@
-// Teste da comunicacao do sensor DHT22
+// Sender - Leitura de DHT22 e MH-Z19C e envio via LoRa
 
 #include <RadioLib.h>
 #include <SPI.h>
@@ -6,8 +6,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <DHT22.h>
-#include <esp_now.h>
-#include <WiFi.h>
+#include <MHZ.h>
 
 // Pins for Heltec LoRa V3 (ESP32-S3)
 #define SCK_LORA 9
@@ -28,20 +27,24 @@
 #define SCREEN_HEIGHT 64
 #define BAND 915.0 // MHz
 
-typedef struct struct_message {
-    uint8_t mac[6];
-    float temp;
-    int ppmCo2;
-} struct_message;
+// Pinos dos Sensores
+#define DHT_PIN 4
+#define BAUDRATE 9600
 
-struct_message incomingReadings;
+#define CO2_IN 19 // Pino PWM
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
 SX1262 radio = new Module(SS_LORA, DIO1_LORA, RST_LORA, BUSY_LORA);
+DHT22 dhtSensor(DHT_PIN);
+MHZ co2(CO2_IN, MHZ19C);
 
 void setup()
 {
     Serial.begin(115200);
+    pinMode(CO2_IN, INPUT);
+
+    // Inicializa a conexão UART para o sensor de CO2
+    co2Serial.begin(BAUDRATE, SERIAL_8N1, MHZ_RX_PIN, MHZ_TX_PIN);
 
     // Turn on Vext power for OLED and LoRa (V3 uses GPIO 36)
     pinMode(VEXT_PIN, OUTPUT);
@@ -93,30 +96,103 @@ void setup()
         while (true)
             ;
     }
+
+    // Sensor MHZ precisa esquentar antes de funcionar corretamente
+    if (co2.isPreHeating()) {
+        Serial.print("Preheating");
+        while (co2.isPreHeating()) {
+        Serial.print(".");
+        delay(5000);
+        }
+        Serial.println();
+    }
+    Serial.println("Inicializando... Aguardando sensores.");
+    delay(2000);
 }
 
 void loop()
 {
-    // Update Display
-    display.clearDisplay();
+    // 1. Leitura de Temperatura e Umidade (DHT22)
+    float temp = dhtSensor.getTemperature();
+    float hum = dhtSensor.getHumidity();
+    if (isnan(temp) || isnan(hum))
+    {
+        Serial.println("Falha na leitura do sensor DHT22!");
+    }
 
+    // 2. Leitura de CO2 (MH-Z19C)
+    int co2 = co2.readCO2PWM(); // leitura do co2
+    uint8_t cmd[9] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
+
+
+    // 3. Monta a string para envio
+    char payload[64];
+    snprintf(payload, sizeof(payload), "t:%.1f,h:%.1f,co2:%d", temp, hum, co2);
+
+    Serial.print("Transmitindo: ");
+    Serial.println(payload);
+
+    // 4. Envia por LoRa
+    int state = radio.transmit(payload);
+
+    if (state == RADIOLIB_ERR_NONE)
+    {
+        Serial.println(F("Envio LoRa com sucesso!"));
+    }
+    else
+    {
+        Serial.print(F("Falha LoRa, codigo "));
+        Serial.println(state);
+    }
+
+    // 5. Atualiza o Display OLED
+    display.clearDisplay();
     display.setTextSize(1);
     display.setCursor(0, 0);
     display.println("SENDER V3");
 
-    display.setCursor(0, 15);
+    display.setCursor(0, 12);
     display.print("Temp: ");
-    display.println(incomingReadings.temp);
+    if (!isnan(temp))
+    {
+        display.print(temp);
+        display.print(" C");
+    }
+    else
+    {
+        display.print("ERRO");
+    }
 
-    display.setCursor(0, 25);
-    display.print("CO2: ");
-    display.println(incomingReadings.ppmCo2);
+    display.setCursor(0, 24);
+    display.print("Umid: ");
+    if (!isnan(hum))
+    {
+        display.print(hum);
+        display.print(" %");
+    }
+    else
+    {
+        display.print("ERRO");
+    }
 
-    display.setTextSize(2);
-    display.setCursor(0, 45);
-    display.println("OK");
+    display.setCursor(0, 36);
+    display.print("CO2:  ");
+    if (co2 != -1)
+    {
+        display.print(co2);
+        display.print(" ppm");
+    }
+    else
+    {
+        display.print("ERRO");
+    }
+
+    display.setCursor(0, 50);
+    display.print("LoRa: ");
+    display.println(state == RADIOLIB_ERR_NONE ? "OK" : "FALHA");
 
     display.display();
-    
+
+    // 6. Aguarda antes da proxima leitura
     delay(2000);
 }
