@@ -5,6 +5,7 @@
 #include <Adafruit_SSD1306.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include "wifi_credentials.h"
 
 // Pins for Heltec LoRa V3 (ESP32-S3)
 #define SCK_LORA 9
@@ -24,10 +25,6 @@
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define BAND 915.0 // MHz
-
-// WiFi Configuration
-const char *ssid = ".....";
-const char *password = ".....";
 
 // Web Server (HTTP) on port 80
 WebServer webServer(80);
@@ -181,9 +178,9 @@ void setup_wifi()
     Serial.println("");
 
     Serial.print("Connecting to ");
-    Serial.println(ssid);
+    Serial.println(WIFI_SSID);
 
-    WiFi.begin(ssid, password);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
     while (WiFi.status() != WL_CONNECTED)
     {
@@ -197,8 +194,44 @@ void setup_wifi()
     Serial.println(WiFi.localIP());
 }
 
-// Update OLED to show only the device title and the IP address
-void showTitleAndIP()
+// O OLED alterna entre a tela de dados e a tela de IP, 3s em cada,
+// para caber tanto as leituras quanto o endereco usado pelo app no
+// mesmo display pequeno.
+#define SCREEN_ROTATE_INTERVAL_MS 3000
+enum OledScreen
+{
+    SCREEN_DATA = 0,
+    SCREEN_IP = 1
+};
+OledScreen currentScreen = SCREEN_DATA;
+unsigned long lastScreenSwitchMillis = 0;
+
+void showDataScreen()
+{
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.println("LoRa Receiver V3");
+
+    display.setCursor(0, 16);
+    display.print("Temp: ");
+    display.print(latestData.temperature, 1);
+    display.println(" C");
+
+    display.setCursor(0, 28);
+    display.print("Umid: ");
+    display.print(latestData.humidity, 1);
+    display.println(" %");
+
+    display.setCursor(0, 40);
+    display.print("CO2:  ");
+    display.print(latestData.co2);
+    display.println(" ppm");
+
+    display.display();
+}
+
+void showIPScreen()
 {
     display.clearDisplay();
     display.setTextSize(2);
@@ -211,6 +244,29 @@ void showTitleAndIP()
     display.print("IP: ");
     display.println(WiFi.localIP());
     display.display();
+}
+
+void showCurrentScreen()
+{
+    if (currentScreen == SCREEN_DATA)
+    {
+        showDataScreen();
+    }
+    else
+    {
+        showIPScreen();
+    }
+}
+
+void updateScreenRotation()
+{
+    unsigned long now = millis();
+    if (now - lastScreenSwitchMillis >= SCREEN_ROTATE_INTERVAL_MS)
+    {
+        lastScreenSwitchMillis = now;
+        currentScreen = (currentScreen == SCREEN_DATA) ? SCREEN_IP : SCREEN_DATA;
+        showCurrentScreen();
+    }
 }
 
 void setup()
@@ -289,8 +345,9 @@ void setup()
     Serial.print(WiFi.localIP());
     Serial.println(":80");
 
-    // Show title and IP on the OLED so user can connect
-    showTitleAndIP();
+    // Inicia a rotacao de telas do OLED (dados <-> IP)
+    lastScreenSwitchMillis = millis();
+    showCurrentScreen();
 }
 
 void loop()
@@ -300,6 +357,9 @@ void loop()
 
     // Handle incoming HTTP requests
     webServer.handleClient();
+
+    // Alterna a tela do OLED a cada 3s (dados <-> IP)
+    updateScreenRotation();
 
     // If MOCK_MODE is enabled, periodically generate fake data so the
     // `/data` endpoint can be tested without real LoRa packets.
@@ -321,8 +381,8 @@ void loop()
             latestData.rssi = -50; // reasonable fixed RSSI for mock
             latestData.timestamp = now;
 
-            // Keep OLED showing only title+IP (do not display sensor values)
-            showTitleAndIP();
+            // Atualiza a tela atual (se for a de dados) com a leitura nova
+            showCurrentScreen();
         }
     }
 
@@ -347,8 +407,8 @@ void loop()
             latestData.rssi = radio.getRSSI();
             latestData.timestamp = millis();
 
-            // Keep OLED showing only title+IP (do not display sensor values)
-            showTitleAndIP();
+            // Atualiza a tela atual (se for a de dados) com a leitura nova
+            showCurrentScreen();
         }
 
         // Volta a escutar novos pacotes

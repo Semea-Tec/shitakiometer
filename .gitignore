@@ -1,0 +1,8 @@
+# Credenciais locais (WiFi, etc.) - cada pessoa configura a sua a partir do .example
+wifi_credentials.h
+
+# Build artifacts
+.pio/
+build/
+*.bin
+*.elf

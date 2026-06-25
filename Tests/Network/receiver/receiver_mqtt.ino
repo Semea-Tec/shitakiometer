@@ -5,6 +5,7 @@
 #include <Adafruit_SSD1306.h>
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include "wifi_credentials.h"
 
 // Pins for Heltec LoRa V3 (ESP32-S3)
 #define SCK_LORA 9
@@ -25,9 +26,7 @@
 #define SCREEN_HEIGHT 64
 #define BAND 915.0 // MHz
 
-// WiFi and MQTT Configuration
-const char* ssid = "...";
-const char* password = "...";
+// MQTT Configuration (credenciais WiFi vem de wifi_credentials.h)
 const char* mqtt_server = "192.168.15.82";
 const int mqtt_port = 1883;
 const char* mqtt_topic = "sensores/temperatura";
@@ -75,9 +74,9 @@ void setup_wifi() {
     Serial.println("");
 
     Serial.print("Connecting to ");
-    Serial.println(ssid);
+    Serial.println(WIFI_SSID);
 
-    WiFi.begin(ssid, password);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
@@ -95,7 +94,7 @@ void reconnect() {
         if (WiFi.status() != WL_CONNECTED) {
             Serial.println("WiFi desconectado. Reconectando...");
             WiFi.disconnect();
-            WiFi.begin(ssid, password);
+            WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
             delay(5000);
             continue; // Não tenta conectar no MQTT se não tiver WiFi
         }
