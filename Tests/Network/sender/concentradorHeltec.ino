@@ -1,17 +1,23 @@
-// [LEGADO] Sender standalone - Leitura de DHT22 e MH-Z19C e envio via LoRa
-// no mesmo board (Heltec V3). Substituido pela arquitetura dividida:
-//   Tests/Network/sensor/sensor.ino (XIAO ESP32-C5, le sensores, ESP-NOW)
-//   Tests/Network/sender/concentradorHeltec.ino (Heltec, ESP-NOW -> LoRa)
-// Mantido aqui apenas como referencia/fallback para testar o Heltec
-// isoladamente, sem o XIAO. Ver Docs/CODEBASE_MEMORY.md.
+// Concentrador (Camada de Borda) - Heltec WiFi LoRa 32 V3 (ESP32-S3)
+//
+// Recebe os dados do sensor (Seeed XIAO ESP32-C5, ESP-NOW broadcast,
+// ver Tests/Network/sensor/sensor.ino) e retransmite via LoRa P2P (915MHz)
+// para o receptor/gateway proximo ao usuario final. Mantem o mesmo formato
+// de payload usado anteriormente ("t:..,h:..,co2:.."), entao os sketches
+// de receiver (receiver_webServer.ino / receiver_mqtt.ino) nao precisam
+// de alteracao.
+//
+// Substitui o papel de leitura de sensores que existia em
+// senderWithSensors.ino (agora mantido apenas como referencia legada,
+// modo standalone sem o XIAO).
 
 #include <RadioLib.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <DHT22.h>
-#include <HardwareSerial.h>
+#include <esp_now.h>
+#include <WiFi.h>
 
 // Pins for Heltec LoRa V3 (ESP32-S3)
 #define SCK_LORA 9
@@ -32,23 +38,31 @@
 #define SCREEN_HEIGHT 64
 #define BAND 915.0 // MHz
 
-// Pinos dos Sensores
-#define DHT_PIN 4
-#define MHZ_RX_PIN 5 // RX para o MH-Z19C
-#define MHZ_TX_PIN 6 // TX para o MH-Z19C
-#define BAUDRATE 9600
-
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
 SX1262 radio = new Module(SS_LORA, DIO1_LORA, RST_LORA, BUSY_LORA);
-DHT22 dhtSensor(DHT_PIN);
-HardwareSerial co2Serial(1); // Usando UART 1 para o sensor de CO2
+
+// Mesma struct enviada pelo sensor XIAO ESP32-C5 (Tests/Network/sensor/sensor.ino)
+typedef struct struct_message
+{
+    float temp;
+    float hum;
+    int co2;
+} struct_message;
+
+volatile struct_message lastReading = {NAN, NAN, -1};
+volatile bool hasNewReading = false;
+
+void onDataReceived(const esp_now_recv_info_t *info, const uint8_t *incomingData, int len)
+{
+    if (len != sizeof(struct_message))
+        return;
+    memcpy((void *)&lastReading, incomingData, sizeof(struct_message));
+    hasNewReading = true;
+}
 
 void setup()
 {
     Serial.begin(115200);
-
-    // Inicializa a conexão UART para o sensor de CO2
-    co2Serial.begin(BAUDRATE, SERIAL_8N1, MHZ_RX_PIN, MHZ_TX_PIN);
 
     // Turn on Vext power for OLED and LoRa (V3 uses GPIO 36)
     pinMode(VEXT_PIN, OUTPUT);
@@ -65,9 +79,6 @@ void setup()
     delay(20);
     digitalWrite(OLED_RST, HIGH);
 
-    // Seed the random number generator
-    randomSeed(analogRead(1));
-
     // Initialize OLED
     Wire.begin(OLED_SDA, OLED_SCL);
     if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
@@ -83,7 +94,8 @@ void setup()
     display.dim(false);
     display.setTextColor(WHITE);
     display.setCursor(0, 0);
-    display.println("SENDER V3 READY");
+    display.println("CONCENTRADOR V3");
+    display.println("Aguardando ESP-NOW");
     display.display();
 
     // Initialize LoRa
@@ -101,74 +113,39 @@ void setup()
             ;
     }
 
-    Serial.println("Inicializando... Aguardando sensores.");
-    delay(2000);
+    // Initialize ESP-NOW (recebe do sensor XIAO ESP32-C5)
+    WiFi.mode(WIFI_STA);
+    if (esp_now_init() != ESP_OK)
+    {
+        Serial.println("Erro ao iniciar ESP-NOW");
+        while (true)
+            ;
+    }
+    esp_now_register_recv_cb(onDataReceived);
+
+    Serial.println("Concentrador pronto. Aguardando dados do sensor...");
+    delay(1000);
 }
 
 void loop()
 {
-    // 1. Leitura de Temperatura e Umidade (DHT22)
-    float temp = dhtSensor.getTemperature();
-    float hum = dhtSensor.getHumidity();
-    if (isnan(temp) || isnan(hum))
+    if (!hasNewReading)
     {
-        Serial.println("Falha na leitura do sensor DHT22!");
+        delay(50);
+        return;
     }
 
-    // 2. Leitura de CO2 (MH-Z19C)
-    int co2 = -1; // Valor inválido padrão
-    uint8_t cmd[9] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
+    struct_message reading;
+    memcpy(&reading, (void *)&lastReading, sizeof(struct_message));
+    hasNewReading = false;
 
-    // Limpa o buffer de entrada
-    while (co2Serial.available() > 0)
-        co2Serial.read();
-
-    // Requisita leitura
-    co2Serial.write(cmd, 9);
-    co2Serial.flush();
-
-    // Espera a resposta
-    unsigned long startTime = millis();
-    while (co2Serial.available() < 9 && (millis() - startTime) < 1000)
-    {
-        delay(10);
-    }
-
-    if (co2Serial.available() >= 9)
-    {
-        uint8_t response[9];
-        co2Serial.readBytes(response, 9);
-
-        // Valida o checksum
-        uint8_t checksum = 0;
-        for (int i = 1; i < 8; i++)
-        {
-            checksum += response[i];
-        }
-        checksum = 255 - checksum + 1;
-
-        if (response[0] == 0xFF && response[1] == 0x86 && response[8] == checksum)
-        {
-            co2 = (response[2] * 256) + response[3];
-        }
-        else
-        {
-            Serial.println("Falha de Checksum no sensor de CO2.");
-        }
-    }
-    else
-    {
-        Serial.println("Falha ao ler o CO2. Sem resposta.");
-    }
-
-    // 3. Monta a string para envio
+    // Monta a string para envio (mesmo formato consumido pelos receivers)
     char payload[64];
-    snprintf(payload, sizeof(payload), "t:%.1f,h:%.1f,co2:%d", temp, hum, co2);
+    snprintf(payload, sizeof(payload), "t:%.1f,h:%.1f,co2:%d", reading.temp, reading.hum, reading.co2);
 
-    Serial.print("Transmitindo: ");
+    Serial.print("Transmitindo via LoRa: ");
     Serial.println(payload);
 
-    // 4. Envia por LoRa
     int state = radio.transmit(payload);
 
     if (state == RADIOLIB_ERR_NONE)
@@ -181,17 +158,17 @@ void loop()
         Serial.println(state);
     }
 
-    // 5. Atualiza o Display OLED
+    // Atualiza o Display OLED
     display.clearDisplay();
     display.setTextSize(1);
     display.setCursor(0, 0);
-    display.println("SENDER V3");
+    display.println("CONCENTRADOR V3");
 
     display.setCursor(0, 12);
     display.print("Temp: ");
-    if (!isnan(temp))
+    if (!isnan(reading.temp))
     {
-        display.print(temp);
+        display.print(reading.temp);
         display.print(" C");
     }
     else
@@ -201,9 +178,9 @@ void loop()
 
     display.setCursor(0, 24);
     display.print("Umid: ");
-    if (!isnan(hum))
+    if (!isnan(reading.hum))
     {
-        display.print(hum);
+        display.print(reading.hum);
         display.print(" %");
     }
     else
@@ -213,9 +190,9 @@ void loop()
 
     display.setCursor(0, 36);
     display.print("CO2:  ");
-    if (co2 != -1)
+    if (reading.co2 != -1)
     {
-        display.print(co2);
+        display.print(reading.co2);
         display.print(" ppm");
     }
     else
@@ -228,7 +205,4 @@ void loop()
     display.println(state == RADIOLIB_ERR_NONE ? "OK" : "FALHA");
 
     display.display();
-
-    // 6. Aguarda antes da proxima leitura
-    delay(2000);
 }
