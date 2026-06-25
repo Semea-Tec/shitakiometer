@@ -11,14 +11,15 @@
 #include <esp_mac.h>
 #include <WiFi.h>
 #include <DHT22.h>
-#include <HardwareSerial.h>
 
 // Pinos do XIAO ESP32-C5 (board com poucos GPIOs, ver datasheet Seeed)
 #define DHT_PIN 25     // D2 - GPIO25, livre, sem funcao alternativa
-#define MHZ_RX_PIN 12  // D7 - recebe o TX do sensor MH-Z19C
-#define MHZ_TX_PIN 11  // D6 - envia para o RX do sensor MH-Z19C
-#define STATUS_LED 27  // LED amarelo onboard do XIAO ESP32-C5
-#define BAUDRATE 9600
+// MH-Z19C: o chicote em campo só tem VCC, GND e o fio amarelo (PWM) ligados
+// - os fios de UART (RX/TX) foram cortados para economizar espaço na case.
+// Por isso a leitura é feita via PWM, não via UART. Ver Docs/CODEBASE_MEMORY.md.
+#define MHZ_PWM_PIN 12     // D7 - fio amarelo do MH-Z19C
+#define MHZ_RANGE_PPM 5000 // faixa de detecção configurada no sensor (0-5000ppm)
+#define STATUS_LED 27      // LED amarelo onboard do XIAO ESP32-C5
 
 // Endereco de broadcast: dispensa descobrir/fixar o MAC do concentrador.
 // Qualquer Heltec dentro do alcance com o sketch concentrador roda e recebe.
@@ -34,7 +35,6 @@ typedef struct struct_message
 struct_message myData;
 esp_now_peer_info_t peerInfo;
 DHT22 dhtSensor(DHT_PIN);
-HardwareSerial co2Serial(1); // UART1 para o sensor de CO2
 
 void setup()
 {
@@ -43,7 +43,7 @@ void setup()
     pinMode(STATUS_LED, OUTPUT);
     digitalWrite(STATUS_LED, LOW);
 
-    co2Serial.begin(BAUDRATE, SERIAL_8N1, MHZ_RX_PIN, MHZ_TX_PIN);
+    pinMode(MHZ_PWM_PIN, INPUT);
 
     WiFi.mode(WIFI_STA);
 
@@ -67,45 +67,25 @@ void setup()
     delay(2000);
 }
 
-// Le o CO2 do MH-Z19C via comando UART (protocolo padrao, mesmo usado
-// no concentrador antigo Tests/Network/sender/senderWithSensors.ino).
+// Le o CO2 do MH-Z19C via PWM (fio amarelo - unico sinal disponivel no
+// chicote real, ja que os fios de UART foram cortados). Formula do
+// datasheet Winsen: Cppm = Range * (Th - 2ms) / (Th + Tl - 4ms),
+// ciclo de ~1004ms.
 int readCO2()
 {
-    uint8_t cmd[9] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
+    unsigned long thUs = pulseIn(MHZ_PWM_PIN, HIGH, 1100000UL);
+    unsigned long tlUs = pulseIn(MHZ_PWM_PIN, LOW, 1100000UL);
 
-    while (co2Serial.available() > 0)
-        co2Serial.read();
-
-    co2Serial.write(cmd, 9);
-    co2Serial.flush();
-
-    unsigned long startTime = millis();
-    while (co2Serial.available() < 9 && (millis() - startTime) < 1000)
+    if (thUs == 0 || tlUs == 0)
     {
-        delay(10);
-    }
-
-    if (co2Serial.available() < 9)
-    {
-        Serial.println("Falha ao ler o CO2. Sem resposta.");
+        Serial.println("Falha ao ler o CO2 via PWM (timeout).");
         return -1;
     }
 
-    uint8_t response[9];
-    co2Serial.readBytes(response, 9);
+    float thMs = thUs / 1000.0;
+    float tlMs = tlUs / 1000.0;
 
-    uint8_t checksum = 0;
-    for (int i = 1; i < 8; i++)
-        checksum += response[i];
-    checksum = 255 - checksum + 1;
-
-    if (response[0] != 0xFF || response[1] != 0x86 || response[8] != checksum)
-    {
-        Serial.println("Falha de Checksum no sensor de CO2.");
-        return -1;
-    }
-
-    return (response[2] * 256) + response[3];
+    return (int)(MHZ_RANGE_PPM * (thMs - 2.0) / (thMs + tlMs - 4.0));
 }
 
 void loop()

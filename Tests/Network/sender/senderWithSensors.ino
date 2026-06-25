@@ -11,7 +11,6 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <DHT22.h>
-#include <HardwareSerial.h>
 
 // Pins for Heltec LoRa V3 (ESP32-S3)
 #define SCK_LORA 9
@@ -34,21 +33,22 @@
 
 // Pinos dos Sensores
 #define DHT_PIN 4
-#define MHZ_RX_PIN 5 // RX para o MH-Z19C
-#define MHZ_TX_PIN 6 // TX para o MH-Z19C
-#define BAUDRATE 9600
+// MH-Z19C: o chicote em campo só tem VCC, GND e o fio amarelo (PWM) ligados
+// - os fios de UART (RX/TX) foram cortados para economizar espaço na case.
+// Por isso a leitura é feita via PWM, não via UART. Ver Docs/CODEBASE_MEMORY.md.
+#define MHZ_PWM_PIN 5     // fio amarelo do MH-Z19C
+#define MHZ_RANGE_PPM 5000 // faixa de detecção configurada no sensor (0-5000ppm)
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
 SX1262 radio = new Module(SS_LORA, DIO1_LORA, RST_LORA, BUSY_LORA);
 DHT22 dhtSensor(DHT_PIN);
-HardwareSerial co2Serial(1); // Usando UART 1 para o sensor de CO2
 
 void setup()
 {
     Serial.begin(115200);
 
-    // Inicializa a conexão UART para o sensor de CO2
-    co2Serial.begin(BAUDRATE, SERIAL_8N1, MHZ_RX_PIN, MHZ_TX_PIN);
+    // MH-Z19C via PWM: apenas leitura digital, sem necessidade de begin()
+    pinMode(MHZ_PWM_PIN, INPUT);
 
     // Turn on Vext power for OLED and LoRa (V3 uses GPIO 36)
     pinMode(VEXT_PIN, OUTPUT);
@@ -105,6 +105,25 @@ void setup()
     delay(2000);
 }
 
+// Le o CO2 do MH-Z19C via PWM (fio amarelo). Formula do datasheet Winsen:
+// Cppm = Range * (Th - 2ms) / (Th + Tl - 4ms), ciclo de ~1004ms.
+int readCO2Pwm()
+{
+    unsigned long thUs = pulseIn(MHZ_PWM_PIN, HIGH, 1100000UL);
+    unsigned long tlUs = pulseIn(MHZ_PWM_PIN, LOW, 1100000UL);
+
+    if (thUs == 0 || tlUs == 0)
+    {
+        Serial.println("Falha ao ler o CO2 via PWM (timeout).");
+        return -1;
+    }
+
+    float thMs = thUs / 1000.0;
+    float tlMs = tlUs / 1000.0;
+
+    return (int)(MHZ_RANGE_PPM * (thMs - 2.0) / (thMs + tlMs - 4.0));
+}
+
 void loop()
 {
     // 1. Leitura de Temperatura e Umidade (DHT22)
@@ -115,51 +134,8 @@ void loop()
         Serial.println("Falha na leitura do sensor DHT22!");
     }
 
-    // 2. Leitura de CO2 (MH-Z19C)
-    int co2 = -1; // Valor inválido padrão
-    uint8_t cmd[9] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
-
-    // Limpa o buffer de entrada
-    while (co2Serial.available() > 0)
-        co2Serial.read();
-
-    // Requisita leitura
-    co2Serial.write(cmd, 9);
-    co2Serial.flush();
-
-    // Espera a resposta
-    unsigned long startTime = millis();
-    while (co2Serial.available() < 9 && (millis() - startTime) < 1000)
-    {
-        delay(10);
-    }
-
-    if (co2Serial.available() >= 9)
-    {
-        uint8_t response[9];
-        co2Serial.readBytes(response, 9);
-
-        // Valida o checksum
-        uint8_t checksum = 0;
-        for (int i = 1; i < 8; i++)
-        {
-            checksum += response[i];
-        }
-        checksum = 255 - checksum + 1;
-
-        if (response[0] == 0xFF && response[1] == 0x86 && response[8] == checksum)
-        {
-            co2 = (response[2] * 256) + response[3];
-        }
-        else
-        {
-            Serial.println("Falha de Checksum no sensor de CO2.");
-        }
-    }
-    else
-    {
-        Serial.println("Falha ao ler o CO2. Sem resposta.");
-    }
+    // 2. Leitura de CO2 (MH-Z19C via PWM - unico fio de sinal disponivel)
+    int co2 = readCO2Pwm();
 
     // 3. Monta a string para envio
     char payload[64];

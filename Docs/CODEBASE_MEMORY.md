@@ -53,23 +53,49 @@ Board com poucos GPIOs expostos (D0-D10). Mapeamento usado em
 | Função              | Pino do board | GPIO    | Observação                                  |
 |---------------------|---------------|---------|----------------------------------------------|
 | DHT22 (dado)         | D2            | GPIO25  | GPIO livre, sem função alternativa relevante |
-| MH-Z19C RX (do XIAO)| D7            | GPIO12  | Recebe o TX do sensor de CO2                 |
-| MH-Z19C TX (do XIAO)| D6            | GPIO11  | Envia para o RX do sensor de CO2             |
+| MH-Z19C PWM (fio amarelo) | D7       | GPIO12  | Único fio de sinal disponível (ver nota abaixo) |
 | LED de status        | onboard       | GPIO27  | LED amarelo onboard do XIAO                  |
 
 Pinos **não usados** neste projeto, mas disponíveis no board (referência
 para expansão futura): D0/GPIO1 (ADC), D1/GPIO0, D3/GPIO7, D4/GPIO23 (I2C
-SDA), D5/GPIO24 (I2C SCL), D8/GPIO8, D9/GPIO9, D10/GPIO10 (SPI, caso um
-dia seja necessário ligar outro periférico SPI). Os pinos JTAG
+SDA), D5/GPIO24 (I2C SCL), D6/GPIO11 (livre — antes usado para UART TX do
+MH-Z19C, hoje sem uso), D8/GPIO8, D9/GPIO9, D10/GPIO10 (SPI, caso um dia
+seja necessário ligar outro periférico SPI). Os pinos JTAG
 (MTDO/MTDI/MTCK/MTMS — GPIO5/3/4/2) foram evitados de propósito: a Seeed
 recomenda não reaproveitá-los para evitar problemas de debug/boot.
+
+### MH-Z19C: leitura via PWM, não UART
+
+O chicote dos sensores MH-Z19C realmente instalados em campo só tem
+**3 fios conectados: VCC, GND e o fio amarelo (PWM)** — os fios de UART
+(RX/TX) foram cortados para economizar espaço dentro da case. Por isso
+tanto `sensor.ino` (XIAO) quanto o legado `senderWithSensors.ino` (Heltec)
+leem o CO2 via **PWM** usando `pulseIn()`, e não mais via comando UART
+(`0xFF 0x01 0x86...`). O teste de laboratório em
+[`Tests/Sensors/MH-Z19C/readCO2.ino`](../Tests/Sensors/MH-Z19C/readCO2.ino)
+ainda usa UART e assume os 7 pinos conectados — não reflete o hardware
+de campo.
+
+Fórmula (datasheet Winsen, ciclo de PWM ~1004ms):
+
+```
+Cppm = Range * (Th - 2ms) / (Th + Tl - 4ms)
+```
+
+Onde `Th`/`Tl` são os tempos em nível alto/baixo de um ciclo, medidos com
+`pulseIn()` (retorna microssegundos — converter para ms antes de aplicar
+a fórmula), e `Range` é a faixa de detecção configurada no sensor (este
+projeto usa `5000`, ppm máximo segundo `Docs/documentacao.md`/specs do
+MH-Z19C usado). Um timeout em `pulseIn()` (sensor não respondeu dentro de
+~1.1s) é tratado como falha de leitura (`co2 = -1`), igual ao
+comportamento anterior via UART.
 
 ### Ligações físicas (XIAO ESP32-C5)
 
 - DHT22: `VCC` → 3V3, `GND` → GND, `DATA` → D2.
 - MH-Z19C: alimentar com **5V** (não 3.3V — sensor não funciona
-  corretamente em 3.3V), `GND` → GND, `TX` (do sensor) → D7, `RX` (do
-  sensor) → D6.
+  corretamente em 3.3V), `GND` → GND, fio **amarelo (PWM)** → D7. Os
+  demais fios (UART, calibração, saída analógica) ficam desconectados.
 
 ### Setup do Arduino IDE para o XIAO ESP32-C5
 
@@ -88,6 +114,10 @@ em GPIO 17/18/21, Vext em GPIO 36, LED branco em GPIO 35. A única
 mudança de firmware foi trocar a leitura direta dos sensores por um
 callback `esp_now_register_recv_cb`, mantendo igual a inicialização do
 LoRa/OLED e o formato de payload transmitido.
+
+No legado `senderWithSensors.ino` (Heltec lendo sensores diretamente,
+sem o XIAO) o MH-Z19C também passou a ser lido via PWM no GPIO 5 (antes
+`MHZ_RX_PIN` de UART) — o GPIO 6 (antigo `MHZ_TX_PIN`) ficou livre.
 
 **Atenção:** o concentrador precisa estar no mesmo canal Wi-Fi (canal 0 =
 canal atual do board) que o sensor para receber o broadcast ESP-NOW —

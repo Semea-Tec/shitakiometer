@@ -2,6 +2,15 @@
 
 This folder contains a test sketch (`readCO2.ino`) to read CO2 concentrations (in ppm) using the MH-Z19C NDIR CO2 sensor with an ESP32.
 
+> **Field wiring note:** the sensor modules actually deployed in the field
+> only have 3 wires connected (VCC, GND and the yellow PWM wire) — the
+> UART wires were cut to save space inside the enclosure. The production
+> firmware (`Tests/Network/sensor/sensor.ino` and the legacy
+> `Tests/Network/sender/senderWithSensors.ino`) reads CO2 via **PWM**, not
+> UART, for that reason. This lab test sketch still uses UART and assumes
+> all 7 pins are wired — keep that in mind if you reuse it. See
+> `Docs/CODEBASE_MEMORY.md` for the PWM wiring/formula used in production.
+
 ## Sensor Specifications
 - **Operating Voltage:** 5.0 ± 0.1V DC (It must be powered from the ESP32's `5V` or `VIN` pin, not `3.3V`).
 - **Data Logic Level:** 3.3V compatible (Safe to connect directly to ESP32 RX/TX pins without a logic level converter).
