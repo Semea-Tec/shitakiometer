@@ -95,11 +95,11 @@ void loop()
         display.setCursor(0, 15);
         display.println("Value Received:");
 
-        display.setTextSize(2);
+        // setTextSize(1) para caber a string inteira numa linha sem
+        // quebrar (em size(2) strings longas quebram e sobrepoem o RSSI)
         display.setCursor(0, 30);
         display.println(str);
 
-        display.setTextSize(1);
         display.setCursor(0, 50);
         display.print("RSSI: ");
         display.print(radio.getRSSI());
