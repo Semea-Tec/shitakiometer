@@ -92,10 +92,20 @@ comportamento anterior via UART.
 
 ### Ligações físicas (XIAO ESP32-C5)
 
-- DHT22: `VCC` → 3V3, `GND` → GND, `DATA` → D2.
-- MH-Z19C: alimentar com **5V** (não 3.3V — sensor não funciona
-  corretamente em 3.3V), `GND` → GND, fio **amarelo (PWM)** → D7. Os
-  demais fios (UART, calibração, saída analógica) ficam desconectados.
+- DHT22: `VCC` → `3V3`, `GND` → GND, `DATA` → D2.
+- MH-Z19C: alimentar com **`VBUS`** (o pino de 5V do XIAO — não existe um
+  pino chamado "5V", é o `VBUS`), **nunca `3V3`** — o sensor não levanta a
+  saída PWM corretamente em 3.3V. `GND` → GND, fio **amarelo (PWM)** → D7.
+  Os demais fios (UART, calibração, saída analógica) ficam desconectados.
+
+  > **Cuidado no deploy a bateria/solar:** o `VBUS` do XIAO só tem 5V
+  > quando há alimentação USB-C presente — é um *passthrough* do barramento
+  > USB, não um regulador interno. Em campo, alimentado só por
+  > bateria/painel solar (ver roadmap em `Docs/documentacao.md`), o `VBUS`
+  > fica sem tensão e o MH-Z19C perde alimentação. Será necessário um
+  > conversor boost para 5V entre a bateria e o sensor nesse cenário.
+  > Sintoma de MH-Z19C sem alimentação adequada: leitura PWM em timeout
+  > constante (pino preso em nível baixo, sem nenhuma transição).
 
 ### Setup do Arduino IDE para o XIAO ESP32-C5
 
