@@ -50,6 +50,29 @@ internal pull-down).
 - **"Could not find a BME280/BMP280 sensor"**: check the SDA/SCL wiring
   (swap them if unsure), confirm 3.3V power, and try grounding/floating the
   `SDO` pin to hit the other I2C address.
+- **Readings are frozen (identical values forever)**: this showed up while
+  swapping sensor modules with the board still powered — reconnecting wires
+  alone doesn't make the sketch retry `bme.begin()`, so it keeps printing
+  stale data from the last successful read. Power-cycle the Pico (unplug/
+  replug USB) after reseating wires or swapping modules so `setup()` runs
+  again; if it still freezes on the same implausible value right after a
+  fresh boot, the module itself is likely defective.
 - **Altitude reading looks off**: update `SEALEVEL_HPA` in the sketch to the
   current local sea-level pressure (check a weather report) for an accurate
   reading — otherwise it's only a rough estimate.
+
+## Hardware Validation
+
+Verified on real hardware (Pico 2 W over USB, PlatformIO build/upload) on
+2026-09-23 in São José dos Campos, SP:
+
+- **Sensor #1:** detected as BME280, stable readings (~23.3-23.6 °C,
+  ~953.5 hPa, ~56% humidity). Pressure cross-checked against the SBSJ
+  airport METAR (QNH 1021 hPa at the time) — converting that QNH to the
+  city's known elevation (~630 m) gives an expected station pressure of
+  ~947 hPa, close to the sensor's ~953.5 hPa (within plausible sensor
+  tolerance + the sensor not being co-located with the airport station).
+- **Sensor #2:** identical module, same wiring. Confirmed working after a
+  full USB power-cycle (stable readings ~24.3-24.5 °C, ~954 hPa, ~54%
+  humidity, in line with sensor #1). See the "Readings are frozen"
+  troubleshooting entry above for what happened before the power-cycle.
